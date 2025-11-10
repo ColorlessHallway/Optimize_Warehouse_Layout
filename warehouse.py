@@ -14,7 +14,23 @@ class Warehouse:
         self.packing_stations = []
         self.aisles = []
         self.active_robots = []
-        self.blocked_positions = set() 
+        self.blocked_positions = set()
+        self.congestion_map = {}  # To track path congestion
+
+    def record_congestion(self, x, y):
+        """Record that a robot has passed through a certain cell."""
+        pos = (x, y)
+        self.congestion_map[pos] = self.congestion_map.get(pos, 0) + 1
+
+    def get_congestion(self, x, y):
+        """Get the congestion level of a cell."""
+        #print(f"Getting congestion for position: ({x}, {y}): {self.congestion_map.get((x, y), 0)}")
+        return self.congestion_map.get((x, y), 0)
+
+    def reset_congestion(self):
+        """Reset the congestion map."""
+        #print(f"Resetting congestion map: {self.congestion_map}")
+        self.congestion_map.clear()
         
     def add_entry_dock(self, x, y, dock_id=None):
         dock = {
@@ -30,7 +46,7 @@ class Warehouse:
             'station_id': station_id or f"station_{len(self.packing_stations)}"
         }
         self.packing_stations.append(station)
-        self.blocked_positions.add((x, y))
+        #self.blocked_positions.add((x, y))
     
     def add_aisle(self, start_x, start_y, end_x, end_y, aisle_id=None):
         aisle = {
@@ -138,6 +154,67 @@ class Warehouse:
                 return robot
         return None
     
+    def visualize_congestion_map(self, title="Warehouse Congestion Map", save_path=None):
+        """
+        Visualize the congestion map as a heatmap.
+        """
+        fig, ax = plt.subplots(figsize=(12, 9))
+        
+        congestion_grid = np.zeros((self.height, self.width))
+        for (x, y), count in self.congestion_map.items():
+            if self.is_valid_position(x, y):
+                congestion_grid[y, x] = count
+        
+        if not self.congestion_map:
+            max_congestion = 1
+        else:
+            max_congestion = max(self.congestion_map.values()) if self.congestion_map else 1
+
+        # Create the heatmap
+        cax = ax.imshow(congestion_grid, cmap='hot', interpolation='nearest', vmin=0, vmax=max_congestion)
+        
+        # Add a color bar
+        fig.colorbar(cax, label='Number of Times Visited')
+        
+        # Overlay the warehouse structure for context
+        self._overlay_warehouse_structure(ax)
+        
+        ax.set_title(title, fontsize=14, fontweight='bold')
+        ax.set_xlabel('X Coordinate')
+        ax.set_ylabel('Y Coordinate')
+        
+        plt.tight_layout()
+        
+        if save_path:
+            plt.savefig(save_path, dpi=300)
+            print(f"Congestion map saved to: {save_path}")
+            
+        try:
+            plt.show()
+        except Exception as e:
+            print(f"Display error: {e}")
+
+    def _overlay_warehouse_structure(self, ax):
+        """Helper to draw the warehouse layout on top of a plot."""
+        # Draw blocked positions
+        for x, y in self.blocked_positions:
+            rect = patches.Rectangle((x - 0.5, y - 0.5), 1, 1, linewidth=1, edgecolor='black', facecolor='gray', alpha=0.5)
+            ax.add_patch(rect)
+            
+        # Draw docks
+        for dock in self.entry_docks:
+            x, y = dock['position']
+            rect = patches.Rectangle((x - 0.5, y - 0.5), 1, 1, linewidth=1, edgecolor='blue', facecolor='none')
+            ax.add_patch(rect)
+            ax.text(x, y, 'D', ha='center', va='center', color='blue', fontweight='bold')
+
+        # Draw stations
+        for station in self.packing_stations:
+            x, y = station['position']
+            rect = patches.Rectangle((x - 0.5, y - 0.5), 1, 1, linewidth=1, edgecolor='green', facecolor='none')
+            ax.add_patch(rect)
+            ax.text(x, y, 'P', ha='center', va='center', color='green', fontweight='bold')
+
     def get_warehouse_layout(self):
         layout = [['.' for _ in range(self.width)] for _ in range(self.height)]
         
@@ -352,6 +429,7 @@ class Warehouse:
         
         # Create legend (only for the right plot to avoid duplication)
         if not initial_state:
+            robot_colors = ['#FF1493', '#00CED1', '#FFD700', '#9370DB', '#FF4500']
             legend_elements = [
                 patches.Patch(color='#E6E6FA', label='Aisles'),
                 patches.Patch(color='#8B4513', label='Storage Areas'),
@@ -359,8 +437,14 @@ class Warehouse:
                 patches.Patch(color='#32CD32', label='Packing Stations (P)'),
                 patches.Patch(color='#FF6347', label='Robots (Current)'),
                 patches.Patch(color='#FFB6C1', label='Robot Targets'),
-                patches.Patch(color='#FF1493', label='Movement Paths'),
-                patches.Patch(color='#FF1493', label='Path History (Dots)'),
             ]
+            
+            # Add path legends for the first few robots
+            for i, robot in enumerate(self.active_robots):
+                if i < len(robot_colors):
+                    legend_elements.append(
+                        patches.Patch(color=robot_colors[i], label=f'{robot.robot_id} Path')
+                    )
+            
             ax.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1.02, 1))
-    
+

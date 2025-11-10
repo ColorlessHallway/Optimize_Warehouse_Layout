@@ -11,8 +11,14 @@ class Robot:
         self.total_energy_spent = 0
         self.successful_moves = 0
         self.blocked_attempts = 0
+        self.total_congestion_penalty = 0  # Track congestion penalty
         self.energy_per_move = 1.0  # Base energy cost for successful movement
         self.energy_per_blocked_attempt = 0.5  # Energy wasted on blocked attempts
+    
+    def add_congestion_penalty(self, penalty):
+        """Add a penalty for moving into a congested cell."""
+        self.total_congestion_penalty += penalty
+        self.total_energy_spent += penalty  # Congestion contributes to energy spent
     
     def set_target_position(self, x, y):
         self.target_position = (x, y)
@@ -152,6 +158,7 @@ class Robot:
             'total_attempts': self.successful_moves + self.blocked_attempts,
             'energy_efficiency': self.get_energy_efficiency(),
             'distance_to_target': self.distance_to_target(),
-            'path_length': self.get_path_length()
+            'path_length': self.get_path_length(),
+            'total_congestion_penalty': self.total_congestion_penalty
         }
-    
+
